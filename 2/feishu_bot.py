@@ -14,16 +14,17 @@ from config import (
 
 app = FastAPI()
 
-# 设置 OpenAI API key
-openai.api_key = OPENAI_API_KEY
+# OpenAI API 配置（使用 OpenRouter）
+openai.api_key = os.getenv("OPENROUTER_API_KEY", OPENAI_API_KEY)
+openai.base_url = "https://openrouter.ai/api/v1"
 
 # 获取环境变量，用于 Railway 部署
 PORT = int(os.getenv("PORT", 8080))
 HOST = os.getenv("HOST", "0.0.0.0")
 
 # 重试配置
-MAX_RETRIES = 3
-RETRY_DELAY = 1  # 秒
+MAX_RETRIES = 5
+RETRY_DELAY = 2
 
 async def retry_async(func, *args, max_retries=MAX_RETRIES, delay=RETRY_DELAY):
     """通用重试函数"""
@@ -35,7 +36,9 @@ async def retry_async(func, *args, max_retries=MAX_RETRIES, delay=RETRY_DELAY):
             last_error = e
             print(f"第 {attempt + 1} 次尝试失败: {str(e)}")
             if attempt < max_retries - 1:
-                await asyncio.sleep(delay * (attempt + 1))  # 指数退避
+                retry_delay = delay * (2 ** attempt)
+                print(f"等待 {retry_delay} 秒后重试...")
+                await asyncio.sleep(retry_delay)
     raise last_error
 
 async def get_feishu_token():
@@ -108,16 +111,23 @@ async def call_openai_with_retry(messages: list, max_tokens: int = 150) -> Optio
     async def _call():
         try:
             client = openai.AsyncOpenAI(
-                api_key=OPENAI_API_KEY,
-                timeout=httpx.Timeout(60.0),
-                max_retries=2
+                api_key=openai.api_key,
+                base_url=openai.base_url,
+                timeout=httpx.Timeout(30.0),
+                default_headers={
+                    "HTTP-Referer": "https://github.com/your-repo",  # 替换为你的项目地址
+                    "X-Title": "Weather Bot"  # 你的应用名称
+                }
             )
+            
+            print("正在调用 OpenAI API...")
             response = await client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="openai/gpt-3.5-turbo",  # OpenRouter 需要完整的模型名称
                 messages=messages,
                 temperature=0.7,
                 max_tokens=max_tokens
             )
+            print("OpenAI API 调用成功")
             return response.choices[0].message.content
         except openai.APITimeoutError:
             print("OpenAI API 超时")
@@ -137,8 +147,10 @@ async def call_openai_with_retry(messages: list, max_tokens: int = 150) -> Optio
 async def process_natural_language(text: str) -> dict:
     """使用 OpenAI 处理自然语言查询"""
     try:
-        messages = [
-            {"role": "system", "content": """你是一个天气查询助手。
+        response = await openai.ChatCompletion.acreate(
+            model="openai/gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": """你是一个天气查询助手。
 请分析用户的查询，提取以下信息：
 1. 城市名称
 2. 查询意图（天气、温度、降水等）
@@ -151,14 +163,10 @@ async def process_natural_language(text: str) -> dict:
     "need_travel_advice": true/false,  # 是否需要出行建议
     "original_query": "原始查询"  # 保存原始查询用于天气服务
 }"""},
-            {"role": "user", "content": text}
-        ]
-        
-        response_text = await call_openai_with_retry(messages)
-        if response_text:
-            return json.loads(response_text)
-        
-        raise Exception("OpenAI 返回空响应")
+                {"role": "user", "content": text}
+            ]
+        )
+        return json.loads(response.choices[0].message.content)
     except Exception as e:
         print(f"处理自然语言时出错: {str(e)}")
         # 如果 AI 处理失败，返回基本的解析结果
@@ -172,8 +180,10 @@ async def process_natural_language(text: str) -> dict:
 async def analyze_weather_for_outing(weather_data: dict) -> str:
     """使用 OpenAI 分析天气是否适合出行"""
     try:
-        messages = [
-            {"role": "system", "content": """你是一个天气分析助手。
+        response = await openai.ChatCompletion.acreate(
+            model="openai/gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": """你是一个天气分析助手。
 请根据提供的天气数据，分析今天是否适合出行，并给出建议。
 考虑以下因素：
 1. 温度是否适宜
@@ -182,11 +192,10 @@ async def analyze_weather_for_outing(weather_data: dict) -> str:
 4. 其他可能影响出行的天气因素
 
 请用简洁友好的语气回复。"""},
-            {"role": "user", "content": f"请分析这些天气数据，告诉我是否适合出行：{json.dumps(weather_data, ensure_ascii=False)}"}
-        ]
-        
-        response_text = await call_openai_with_retry(messages, max_tokens=200)
-        return response_text if response_text else "抱歉，我在分析天气数据时遇到了问题。"
+                {"role": "user", "content": f"请分析这些天气数据，告诉我是否适合出行：{json.dumps(weather_data, ensure_ascii=False)}"}
+            ]
+        )
+        return response.choices[0].message.content
     except Exception as e:
         print(f"OpenAI API 调用出错: {str(e)}")
         return "抱歉，我在分析天气数据时遇到了问题。"
