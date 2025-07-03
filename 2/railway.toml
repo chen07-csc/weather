@@ -18,7 +18,4 @@ restartPolicyMaxRetries = 10
 
 [env]
 PORT = "8080"
-PYTHON_VERSION = "3.9"
-# 使用 Railway 提供的代理服务或公共代理
-HTTP_PROXY = "http://proxy.railway.internal:3128"
-HTTPS_PROXY = "http://proxy.railway.internal:3128" 
+PYTHON_VERSION = "3.9" 
