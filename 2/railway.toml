@@ -19,3 +19,4 @@ restartPolicyMaxRetries = 10
 [env]
 PORT = "8080"
 PYTHON_VERSION = "3.9" 
+OPENROUTER_API_KEY = "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"
