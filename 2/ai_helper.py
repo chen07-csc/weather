@@ -10,13 +10,14 @@ class AIHelper:
             raise ValueError("请设置 OPENROUTER_API_KEY 或 OPENAI_API_KEY 环境变量")
         
         # 初始化 OpenAI 客户端，支持 OpenRouter
-        base_url = "https://openrouter.ai/api/v1" if os.getenv("OPENROUTER_API_KEY") else "https://api.openai.com/v1"
+        base_url = "https://api.openrouter.ai/api/v1" if os.getenv("OPENROUTER_API_KEY") else "https://api.openai.com/v1"
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=base_url,
             default_headers={
                 "HTTP-Referer": "https://github.com/your-repo",  # 你的应用来源
                 "X-Title": "Weather Bot",  # 你的应用名称
+                "Authorization": f"Bearer {self.api_key}"
             } if os.getenv("OPENROUTER_API_KEY") else {}
         )
 
@@ -124,4 +125,3 @@ class AIHelper:
             return response.choices[0].message.content
         except Exception as e:
             print(f"生成回复时出错: {str(e)}")
-            return f"{weather_data['city']}的天气：气温 {weather_data['temperature']}，{weather_data['description']}，湿度 {weather_data['humidity']}，风速 {weather_data['wind_speed']}"
