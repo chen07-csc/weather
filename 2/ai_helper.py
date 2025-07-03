@@ -5,15 +5,25 @@ from typing import Dict, Any
 
 class AIHelper:
     def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY")
+        self.api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            raise ValueError("请设置 OPENAI_API_KEY 环境变量")
-        self.client = OpenAI(api_key=self.api_key)
+            raise ValueError("请设置 OPENROUTER_API_KEY 或 OPENAI_API_KEY 环境变量")
+        
+        # 初始化 OpenAI 客户端，支持 OpenRouter
+        base_url = "https://openrouter.ai/api/v1" if os.getenv("OPENROUTER_API_KEY") else "https://api.openai.com/v1"
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=base_url,
+            default_headers={
+                "HTTP-Referer": "https://github.com/your-repo",  # 你的应用来源
+                "X-Title": "Weather Bot",  # 你的应用名称
+            } if os.getenv("OPENROUTER_API_KEY") else {}
+        )
 
     async def process_natural_language(self, text: str) -> dict:
         try:
-            response = await self.client.chat.completions.acreate(
-                model="gpt-3.5-turbo",
+            response = await self.client.chat.completions.create(
+                model="gpt-3.5-turbo-0125" if not os.getenv("OPENROUTER_API_KEY") else "openai/gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": """你是一个天气查询助手。
 请分析用户的查询，提取以下信息：
@@ -46,8 +56,8 @@ class AIHelper:
 
     async def analyze_weather_for_outing(self, weather_data: dict) -> str:
         try:
-            response = await self.client.chat.completions.acreate(
-                model="gpt-3.5-turbo",
+            response = await self.client.chat.completions.create(
+                model="gpt-3.5-turbo-0125" if not os.getenv("OPENROUTER_API_KEY") else "openai/gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": """你是一个天气分析助手。
 请根据提供的天气数据，分析今天是否适合出行，并给出建议。
@@ -71,8 +81,8 @@ class AIHelper:
 
     async def process_weather_query(self, query: str) -> Dict[str, Any]:
         try:
-            response = await self.client.chat.completions.acreate(
-                model="gpt-3.5-turbo",
+            response = await self.client.chat.completions.create(
+                model="gpt-3.5-turbo-0125" if not os.getenv("OPENROUTER_API_KEY") else "openai/gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": """你是一个天气查询助手。
 请分析用户的查询，提取以下信息：
@@ -99,8 +109,8 @@ class AIHelper:
     async def generate_weather_response(self, weather_data: Dict[str, Any]) -> str:
         try:
             weather_info = json.dumps(weather_data, ensure_ascii=False)
-            response = await self.client.chat.completions.acreate(
-                model="gpt-3.5-turbo",
+            response = await self.client.chat.completions.create(
+                model="gpt-3.5-turbo-0125" if not os.getenv("OPENROUTER_API_KEY") else "openai/gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": """你是一个友好的天气助手。
 基于提供的天气数据，生成一个自然、友好的回复。
