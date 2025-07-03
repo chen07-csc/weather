@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, HTTPException
 import httpx
 import json
 import os
-import openai
+from openai import AsyncOpenAI
 import asyncio
 from typing import Optional
 from config import (
@@ -15,10 +15,14 @@ from config import (
 app = FastAPI()
 
 # 初始化 OpenAI Async 客户端（支持 OpenRouter）
-client = openai.AsyncOpenAI(
+client = AsyncOpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY") or OPENAI_API_KEY,
     base_url="https://openrouter.ai/api/v1",
-    timeout=httpx.Timeout(30.0),
+    timeout=30.0,
+    default_headers={
+        "HTTP-Referer": "https://github.com/your-repo",  # 你的应用来源
+        "X-Title": "Weather Bot",  # 你的应用名称
+    }
 )
 
 # 获取环境变量，用于 Railway 部署
@@ -73,7 +77,7 @@ async def send_feishu_message(token: str, chat_id: str, msg_type: str, content: 
 
 async def get_weather(city: str) -> dict:
     url = (
-        f"http://api.openweathermap.org/data/2.5/weather?q={city}"
+        f"https://api.openweathermap.org/data/2.5/weather?q={city}"
         f"&appid={WEATHER_API_KEY}&units=metric&lang=zh_cn"
     )
     async with httpx.AsyncClient(timeout=30.0) as client_http:
