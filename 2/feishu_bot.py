@@ -12,15 +12,8 @@ from config import (
 
 app = FastAPI()
 
-# 设置 OpenAI API key 和代理
+# 设置 OpenAI API key
 openai.api_key = OPENAI_API_KEY
-http_proxy = os.getenv("HTTP_PROXY", "")
-https_proxy = os.getenv("HTTPS_PROXY", "")
-
-# 配置代理
-transport = httpx.AsyncHTTPTransport(
-    proxy=https_proxy if https_proxy else http_proxy if http_proxy else None
-) if (http_proxy or https_proxy) else None
 
 # 获取环境变量，用于 Railway 部署
 PORT = int(os.getenv("PORT", 8080))
@@ -36,7 +29,7 @@ async def get_feishu_token():
     }
     
     try:
-        async with httpx.AsyncClient(transport=transport) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.post(url, json=data, headers=headers)
             return response.json()["tenant_access_token"]
     except Exception as e:
@@ -59,7 +52,7 @@ async def send_feishu_message(token: str, chat_id: str, msg_type: str, content: 
     }
     
     try:
-        async with httpx.AsyncClient(transport=transport) as client:
+        async with httpx.AsyncClient() as client:
             await client.post(url, json=data, headers=headers)
     except Exception as e:
         print(f"发送飞书消息时出错: {str(e)}")
@@ -73,7 +66,7 @@ async def get_weather(city: str) -> dict:
     )
     
     try:
-        async with httpx.AsyncClient(transport=transport) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.get(url)
             data = response.json()
             
@@ -94,13 +87,9 @@ async def get_weather(city: str) -> dict:
 async def process_natural_language(text: str) -> dict:
     """使用 OpenAI 处理自然语言查询"""
     try:
-        # 为 OpenAI 配置同步客户端代理
-        sync_transport = httpx.HTTPTransport(
-            proxy=https_proxy if https_proxy else http_proxy if http_proxy else None
-        ) if (http_proxy or https_proxy) else None
-        
-        client = openai.OpenAI(
-            http_client=httpx.Client(transport=sync_transport) if sync_transport else None
+        client = openai.AsyncOpenAI(
+            api_key=OPENAI_API_KEY,
+            timeout=httpx.Timeout(30.0)
         )
         response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -137,13 +126,9 @@ async def process_natural_language(text: str) -> dict:
 async def analyze_weather_for_outing(weather_data: dict) -> str:
     """使用 OpenAI 分析天气是否适合出行"""
     try:
-        # 为 OpenAI 配置同步客户端代理
-        sync_transport = httpx.HTTPTransport(
-            proxy=https_proxy if https_proxy else http_proxy if http_proxy else None
-        ) if (http_proxy or https_proxy) else None
-        
-        client = openai.OpenAI(
-            http_client=httpx.Client(transport=sync_transport) if sync_transport else None
+        client = openai.AsyncOpenAI(
+            api_key=OPENAI_API_KEY,
+            timeout=httpx.Timeout(30.0)
         )
         response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
