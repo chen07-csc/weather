@@ -8,22 +8,32 @@ from typing import Optional
 from config import (
     FEISHU_APP_ID,
     FEISHU_APP_SECRET,
-    OPENAI_API_KEY,
+    DEEPSEEK_API_KEY,
     WEATHER_API_KEY
 )
 
 app = FastAPI()
 
-# 初始化 OpenAI Async 客户端（支持 OpenRouter）
-client = AsyncOpenAI(
-    api_key=os.getenv("OPENROUTER_API_KEY") or OPENAI_API_KEY,
-    base_url="https://api.openrouter.ai/api/v1",
-    timeout=30.0,
-    default_headers={
-        "HTTP-Referer": "https://github.com/your-repo",  # 你的应用来源
-        "X-Title": "Weather Bot",  # 你的应用名称
-        "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY') or OPENAI_API_KEY}"
+# 配置代理（如果需要）
+http_proxy = os.getenv("HTTP_PROXY")
+https_proxy = os.getenv("HTTPS_PROXY")
+proxies = None
+if http_proxy or https_proxy:
+    proxies = {
+        "http": http_proxy,
+        "https": https_proxy or http_proxy
     }
+
+# 初始化 DeepSeek API 客户端
+client = AsyncOpenAI(
+    api_key=DEEPSEEK_API_KEY,
+    base_url="https://api.deepseek.com/v1",
+    timeout=30.0,
+    http_client=httpx.AsyncClient(
+        proxies=proxies,
+        timeout=30.0,
+        verify=False if os.getenv("SKIP_VERIFY", "").lower() == "true" else True
+    ) if proxies or os.getenv("SKIP_VERIFY", "").lower() == "true" else None
 )
 
 # 获取环境变量，用于 Railway 部署
@@ -41,7 +51,12 @@ async def retry_async(func, *args, max_retries=MAX_RETRIES, delay=RETRY_DELAY):
             return await func(*args)
         except Exception as e:
             last_error = e
-            print(f"第 {attempt + 1} 次尝试失败: {str(e)}")
+            error_msg = str(e)
+            if isinstance(e, httpx.ConnectError):
+                error_msg = f"连接错误: {str(e)}. 请检查网络连接和代理设置。"
+            elif isinstance(e, httpx.TimeoutException):
+                error_msg = f"请求超时: {str(e)}"
+            print(f"第 {attempt + 1} 次尝试失败: {error_msg}")
             if attempt < max_retries - 1:
                 retry_delay = delay * (2 ** attempt)
                 print(f"等待 {retry_delay} 秒后重试...")
@@ -189,4 +204,5 @@ if __name__ == "__main__":
     import uvicorn
     print(f"启动服务，监听 {HOST}:{PORT}")
     uvicorn.run(app, host=HOST, port=PORT)
+
 
