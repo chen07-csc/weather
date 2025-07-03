@@ -12,8 +12,18 @@ from config import (
 
 app = FastAPI()
 
-# 设置 OpenAI API key
+# 设置 OpenAI API key 和代理
 openai.api_key = OPENAI_API_KEY
+http_proxy = os.getenv("HTTP_PROXY", "")
+https_proxy = os.getenv("HTTPS_PROXY", "")
+
+if http_proxy or https_proxy:
+    proxies = {
+        "http": http_proxy,
+        "https": https_proxy or http_proxy
+    }
+else:
+    proxies = None
 
 # 获取环境变量，用于 Railway 部署
 PORT = int(os.getenv("PORT", 8080))
@@ -28,9 +38,13 @@ async def get_feishu_token():
         "app_secret": FEISHU_APP_SECRET
     }
     
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=data, headers=headers)
-        return response.json()["tenant_access_token"]
+    try:
+        async with httpx.AsyncClient(proxies=proxies) as client:
+            response = await client.post(url, json=data, headers=headers)
+            return response.json()["tenant_access_token"]
+    except Exception as e:
+        print(f"获取飞书 token 时出错: {str(e)}")
+        raise
 
 async def send_feishu_message(token: str, chat_id: str, msg_type: str, content: str):
     """发送飞书消息"""
@@ -47,8 +61,12 @@ async def send_feishu_message(token: str, chat_id: str, msg_type: str, content: 
         "content": json.dumps(msg_content)
     }
     
-    async with httpx.AsyncClient() as client:
-        await client.post(url, json=data, headers=headers)
+    try:
+        async with httpx.AsyncClient(proxies=proxies) as client:
+            await client.post(url, json=data, headers=headers)
+    except Exception as e:
+        print(f"发送飞书消息时出错: {str(e)}")
+        raise
 
 async def get_weather(city: str) -> dict:
     """获取天气信息"""
@@ -57,25 +75,31 @@ async def get_weather(city: str) -> dict:
         f"&appid={WEATHER_API_KEY}&units=metric&lang=zh_cn"
     )
     
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        data = response.json()
-        
-        if "main" not in data:
-            return {"error": f"未找到 {city} 的天气信息"}
+    try:
+        async with httpx.AsyncClient(proxies=proxies) as client:
+            response = await client.get(url)
+            data = response.json()
             
-        return {
-            "city": city,
-            "temperature": f"{data['main']['temp']} °C",
-            "description": data["weather"][0]["description"],
-            "humidity": f"{data['main']['humidity']}%",
-            "wind_speed": f"{data['wind']['speed']} m/s"
-        }
+            if "main" not in data:
+                return {"error": f"未找到 {city} 的天气信息"}
+                
+            return {
+                "city": city,
+                "temperature": f"{data['main']['temp']} °C",
+                "description": data["weather"][0]["description"],
+                "humidity": f"{data['main']['humidity']}%",
+                "wind_speed": f"{data['wind']['speed']} m/s"
+            }
+    except Exception as e:
+        print(f"获取天气信息时出错: {str(e)}")
+        return {"error": f"获取天气信息时出错: {str(e)}"}
 
 async def process_natural_language(text: str) -> dict:
     """使用 OpenAI 处理自然语言查询"""
     try:
-        client = openai.OpenAI()
+        client = openai.OpenAI(
+            http_client=httpx.Client(proxies=proxies) if proxies else None
+        )
         response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -111,7 +135,9 @@ async def process_natural_language(text: str) -> dict:
 async def analyze_weather_for_outing(weather_data: dict) -> str:
     """使用 OpenAI 分析天气是否适合出行"""
     try:
-        client = openai.OpenAI()
+        client = openai.OpenAI(
+            http_client=httpx.Client(proxies=proxies) if proxies else None
+        )
         response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -155,10 +181,10 @@ async def handle_webhook(request: Request):
                 text = content.get("text", "").strip()
                 chat_id = event["message"]["chat_id"]
                 
-                # 获取飞书 token
-                token = await get_feishu_token()
-                
                 try:
+                    # 获取飞书 token
+                    token = await get_feishu_token()
+                    
                     # 首先处理自然语言查询
                     query_info = await process_natural_language(text)
                     
@@ -170,7 +196,7 @@ async def handle_webhook(request: Request):
                             token, 
                             chat_id, 
                             "text", 
-                            f"抱歉，获取天气信息时出错：{weather_data['error']}"
+                            f"抱歉，{weather_data['error']}"
                         )
                         return {"status": "ok"}
                     
