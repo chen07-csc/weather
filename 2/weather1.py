@@ -62,7 +62,7 @@ async def get_weather(query: str) -> dict:
         
         # 调用天气 API
         url = (
-            f"http://api.openweathermap.org/data/2.5/weather?q={city}"
+            f"https://api.openweathermap.org/data/2.5/weather?q={city}"
             f"&appid={WEATHER_API_KEY}&units=metric&lang=zh_cn"
         )
         
