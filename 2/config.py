@@ -11,6 +11,11 @@ API_KEY = OPENROUTER_API_KEY or OPENAI_API_KEY
 if not API_KEY:
     raise ValueError("请设置 OPENAI_API_KEY 或 OPENROUTER_API_KEY 环境变量")
 
+# DeepSeek API Key
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "sk-69eff2a29f174782afca4a6f54559e6a")
+if not DEEPSEEK_API_KEY:
+    raise ValueError("请设置 DEEPSEEK_API_KEY 环境变量")
+
 # OpenWeatherMap API Key
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 if not WEATHER_API_KEY:
@@ -32,4 +37,5 @@ MCP_API_BASE_URL = os.getenv("MCP_API_BASE_URL", "http://localhost:8000")
 # Claude (Anthropic) 相关配置（可选）
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", "")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-opus-20240229")
+
 
