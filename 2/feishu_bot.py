@@ -27,7 +27,7 @@ if http_proxy or https_proxy:
 # 初始化 DeepSeek API 客户端
 client = AsyncOpenAI(
     api_key=DEEPSEEK_API_KEY,
-    base_url="https://api.deepseek.com/v1",
+    base_url="https://api.deepseek.com",
     timeout=30.0,
     http_client=httpx.AsyncClient(
         proxies=proxies,
