@@ -19,20 +19,14 @@ fi
 # 设置 MCP URL
 export MCP_URL="http://localhost:8000"
 
-# 启动 MCP 天气服务（在后台运行）
-echo "启动 MCP 天气服务..."
-python3 weather1.py &
-
-# 等待几秒钟确保 MCP 服务启动
-sleep 3
-
 # 启动飞书机器人服务
-echo "启动飞书机器人服务..."
-python3 feishu_bot.py
+python feishu_bot.py &
 
-# 等待用户按 Ctrl+C
-echo "Services are running. Press Ctrl+C to stop..."
-wait $MCP_PID $BOT_PID
+# 启动天气服务
+python weather1.py &
+
+# 等待所有后台进程
+wait
 
 # 捕获 Ctrl+C 信号
 trap 'kill $MCP_PID $BOT_PID; exit' INT
