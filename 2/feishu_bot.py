@@ -17,11 +17,12 @@ app = FastAPI()
 # 初始化 OpenAI Async 客户端（支持 OpenRouter）
 client = AsyncOpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY") or OPENAI_API_KEY,
-    base_url="https://openrouter.ai/api/v1",
+    base_url="https://api.openrouter.ai/api/v1",
     timeout=30.0,
     default_headers={
         "HTTP-Referer": "https://github.com/your-repo",  # 你的应用来源
         "X-Title": "Weather Bot",  # 你的应用名称
+        "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY') or OPENAI_API_KEY}"
     }
 )
 
