@@ -4,6 +4,7 @@ import logging
 import re
 from typing import Dict, Any
 from ai_helper import AIHelper
+from config import WEATHER_API_KEY
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -13,7 +14,6 @@ mcp = FastMCP(
     version="1.0.0"
 )
 
-API_KEY = "3208a48dcdc285e6ef965b4ef293b622"
 ai_helper = AIHelper()
 
 def extract_city_from_text(text: str) -> str:
@@ -49,7 +49,7 @@ async def get_weather(query: str) -> dict:
     """
     try:
         # 使用 OpenAI 处理查询
-        query_info = await ai_helper.process_weather_query(query)
+        query_info = await ai_helper.process_natural_language(query)
         
         # 如果 AI 处理失败，使用后备方案
         if not query_info.get("is_weather_query"):
@@ -63,7 +63,7 @@ async def get_weather(query: str) -> dict:
         # 调用天气 API
         url = (
             f"http://api.openweathermap.org/data/2.5/weather?q={city}"
-            f"&appid={API_KEY}&units=metric&lang=zh_cn"
+            f"&appid={WEATHER_API_KEY}&units=metric&lang=zh_cn"
         )
         
         response = requests.get(url)
@@ -83,7 +83,7 @@ async def get_weather(query: str) -> dict:
         }
         
         # 使用 OpenAI 生成自然语言回复
-        response = await ai_helper.generate_weather_response(weather_data)
+        response = await ai_helper.analyze_weather_for_outing(weather_data)
         
         # 返回结果
         return {
