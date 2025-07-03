@@ -6,7 +6,8 @@ import openai
 from config import (
     FEISHU_APP_ID,
     FEISHU_APP_SECRET,
-    OPENAI_API_KEY
+    OPENAI_API_KEY,
+    WEATHER_API_KEY
 )
 
 app = FastAPI()
@@ -17,7 +18,6 @@ openai.api_key = OPENAI_API_KEY
 # 获取环境变量，用于 Railway 部署
 PORT = int(os.getenv("PORT", 8080))
 HOST = os.getenv("HOST", "0.0.0.0")
-MCP_URL = os.getenv("MCP_URL", "http://localhost:8000")
 
 async def get_feishu_token():
     """获取飞书 access token"""
@@ -50,10 +50,33 @@ async def send_feishu_message(token: str, chat_id: str, msg_type: str, content: 
     async with httpx.AsyncClient() as client:
         await client.post(url, json=data, headers=headers)
 
+async def get_weather(city: str) -> dict:
+    """获取天气信息"""
+    url = (
+        f"http://api.openweathermap.org/data/2.5/weather?q={city}"
+        f"&appid={WEATHER_API_KEY}&units=metric&lang=zh_cn"
+    )
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        data = response.json()
+        
+        if "main" not in data:
+            return {"error": f"未找到 {city} 的天气信息"}
+            
+        return {
+            "city": city,
+            "temperature": f"{data['main']['temp']} °C",
+            "description": data["weather"][0]["description"],
+            "humidity": f"{data['main']['humidity']}%",
+            "wind_speed": f"{data['wind']['speed']} m/s"
+        }
+
 async def process_natural_language(text: str) -> dict:
     """使用 OpenAI 处理自然语言查询"""
     try:
-        response = await openai.ChatCompletion.acreate(
+        client = openai.OpenAI()
+        response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": """你是一个天气查询助手。
@@ -85,19 +108,11 @@ async def process_natural_language(text: str) -> dict:
             "original_query": text
         }
 
-async def query_weather_mcp(query: str) -> dict:
-    """调用 MCP 天气服务"""
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{MCP_URL}/tools/weather/get_weather",
-            json={"query": query}
-        )
-        return response.json()
-
 async def analyze_weather_for_outing(weather_data: dict) -> str:
     """使用 OpenAI 分析天气是否适合出行"""
     try:
-        response = await openai.ChatCompletion.acreate(
+        client = openai.OpenAI()
+        response = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": """你是一个天气分析助手。
@@ -147,8 +162,8 @@ async def handle_webhook(request: Request):
                     # 首先处理自然语言查询
                     query_info = await process_natural_language(text)
                     
-                    # 调用天气服务
-                    weather_data = await query_weather_mcp(query_info["original_query"])
+                    # 获取天气数据
+                    weather_data = await get_weather(query_info["city"])
                     
                     if "error" in weather_data:
                         await send_feishu_message(
@@ -160,7 +175,8 @@ async def handle_webhook(request: Request):
                         return {"status": "ok"}
                     
                     # 如果用户询问了出行建议，使用 OpenAI 分析
-                    response_text = weather_data.get("response", "")
+                    response_text = f"{query_info['city']}的天气：\n温度：{weather_data['temperature']}\n天气：{weather_data['description']}\n湿度：{weather_data['humidity']}\n风速：{weather_data['wind_speed']}"
+                    
                     if query_info.get("need_travel_advice"):
                         analysis = await analyze_weather_for_outing(weather_data)
                         response_text = f"{response_text}\n\n出行建议：\n{analysis}"
